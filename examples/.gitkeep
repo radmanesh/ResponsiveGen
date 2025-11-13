@@ -1,0 +1,13 @@
+# Place example wireframe sketches here
+#
+# Expected structure:
+# examples/
+#   ├── sample_001/
+#   │   ├── mobile.png
+#   │   ├── tablet.png
+#   │   └── desktop.png
+#   └── sample_002/
+#       ├── mobile.png
+#       ├── tablet.png
+#       └── desktop.png
+

@@ -1,0 +1,58 @@
+# Responsive Web Generation - Requirements
+# Python 3.10+
+
+# LangChain Core
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-anthropic>=0.1.0
+langchain-core>=0.1.0
+
+# LLM Providers
+openai>=1.10.0
+anthropic>=0.18.0
+
+# Web Interface
+streamlit>=1.31.0
+
+# Image Processing
+pillow>=10.2.0
+numpy>=1.26.0
+opencv-python>=4.9.0
+
+# Browser Automation
+playwright>=1.41.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Data Models
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+
+# HTTP
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# ML/AI Models (for evaluation)
+transformers>=4.37.0
+torch>=2.2.0
+torchvision>=0.17.0
+
+# Computer Vision (for evaluation)
+scipy>=1.12.0
+scikit-image>=0.22.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Data Processing
+pandas>=2.2.0
+
+# Utilities
+jsonschema>=4.21.0
+tenacity>=8.2.0
+
+# Note: After installation, run:
+# playwright install chromium
+
