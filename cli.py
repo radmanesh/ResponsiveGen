@@ -139,19 +139,122 @@ def cmd_evaluate(args):
     """Evaluate generated HTML against ground truth."""
     print("📊 Evaluating generated webpage...")
 
-    print("⚠️  Note: Full evaluation requires implemented metrics.")
-    print("    Current implementation uses placeholder values.\n")
+    from responsive_gen.evaluation.responsive_meter import ResponsiveMeter
+    from responsive_gen.models import RenderedOutput
+    from datetime import datetime
 
-    # This is a stub - actual implementation requires:
-    # 1. Loading wireframe triplet
-    # 2. Loading rendered output
-    # 3. Loading ground truth (if available)
-    # 4. Running evaluation pipeline
+    # Validate inputs
+    generated_path = Path(args.generated)
+    if not generated_path.exists():
+        print(f"❌ Error: Generated HTML not found: {generated_path}")
+        return 1
 
-    print("🚧 Evaluation pipeline scaffolded but not fully implemented.")
-    print("   See responsive_gen/evaluation/ for metric implementations.")
+    # Extract sample_id from path
+    sample_id = generated_path.parent.name
+    print(f"📁 Sample ID: {sample_id}")
+    print(f"📄 Generated HTML: {generated_path}")
 
-    return 0
+    # Check for screenshots
+    screenshots_dir = generated_path.parent / "screenshots"
+    rendered_output = None
+
+    if screenshots_dir.exists():
+        print(f"📸 Found screenshots: {screenshots_dir}")
+        rendered_output = RenderedOutput(
+            sample_id=sample_id,
+            mobile_screenshot=screenshots_dir / "mobile.png" if (screenshots_dir / "mobile.png").exists() else None,
+            tablet_screenshot=screenshots_dir / "tablet.png" if (screenshots_dir / "tablet.png").exists() else None,
+            desktop_screenshot=screenshots_dir / "desktop.png" if (screenshots_dir / "desktop.png").exists() else None,
+            rendering_timestamp=datetime.now()
+        )
+    else:
+        print("⚠️  No screenshots found. Evaluation may be limited.")
+        rendered_output = RenderedOutput(
+            sample_id=sample_id,
+            rendering_timestamp=datetime.now()
+        )
+
+    # Check for ground truth
+    ground_truth_dir = None
+    if args.ground_truth:
+        ground_truth_dir = Path(args.ground_truth)
+        if not ground_truth_dir.exists():
+            print(f"⚠️  Ground truth directory not found: {ground_truth_dir}")
+            ground_truth_dir = None
+        else:
+            print(f"✅ Ground truth: {ground_truth_dir}")
+            # Check for required files
+            required_files = ['mobile.html', 'tablet.html', 'desktop.html']
+            missing = [f for f in required_files if not (ground_truth_dir / f).exists()]
+            if missing:
+                print(f"⚠️  Missing ground truth files: {', '.join(missing)}")
+    else:
+        print("ℹ️  No ground truth provided. Using placeholder metrics.")
+
+    # Load wireframes if available
+    wireframes_dir = Path(args.wireframes) if args.wireframes else None
+    wireframe_triplet = None
+
+    if wireframes_dir and wireframes_dir.exists():
+        from responsive_gen.io.sketch_loader import SketchLoader
+        loader = SketchLoader()
+        try:
+            wireframe_triplet = loader.load_triplet(
+                wireframes_dir / "mobile.png",
+                wireframes_dir / "tablet.png",
+                wireframes_dir / "desktop.png",
+                sample_id=sample_id
+            )
+            print(f"✅ Loaded wireframes from: {wireframes_dir}")
+        except Exception as e:
+            print(f"⚠️  Could not load wireframes: {e}")
+
+    # If no wireframe triplet, create a minimal one
+    if not wireframe_triplet:
+        from responsive_gen.models import SketchTriplet, SketchInput, ViewportConfig, DeviceType
+        wireframe_triplet = SketchTriplet(
+            sample_id=sample_id,
+            mobile=SketchInput(device_type=DeviceType.MOBILE, image_path=Path(""), viewport=ViewportConfig.mobile()),
+            tablet=SketchInput(device_type=DeviceType.TABLET, image_path=Path(""), viewport=ViewportConfig.tablet()),
+            desktop=SketchInput(device_type=DeviceType.DESKTOP, image_path=Path(""), viewport=ViewportConfig.desktop())
+        )
+
+    # Run evaluation
+    print("\n🔍 Running evaluation...")
+    meter = ResponsiveMeter()
+
+    try:
+        result = meter.evaluate(
+            wireframe_triplet=wireframe_triplet,
+            rendered_output=rendered_output,
+            ground_truth_dir=ground_truth_dir
+        )
+
+        # Save results
+        output_path = Path(args.output)
+        meter.evaluate_and_save(
+            wireframe_triplet=wireframe_triplet,
+            rendered_output=rendered_output,
+            output_path=output_path,
+            ground_truth_dir=ground_truth_dir
+        )
+
+        print(f"\n✅ Evaluation complete!")
+        print(f"📊 Results saved to: {output_path}")
+        print(f"\n📈 Summary:")
+        print(f"   Composite Score: {result.composite_score:.4f}")
+        print(f"   Average IoU: {result.iou_metrics.average_iou:.4f}")
+        print(f"   Mobile IoU: {result.iou_metrics.mobile_iou:.4f}")
+        print(f"   Tablet IoU: {result.iou_metrics.tablet_iou:.4f}")
+        print(f"   Desktop IoU: {result.iou_metrics.desktop_iou:.4f}")
+
+        return 0
+
+    except Exception as e:
+        print(f"\n❌ Evaluation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 
 def main():
@@ -179,7 +282,7 @@ def main():
 
     # Render command
     render_parser = subparsers.add_parser("render", help="Render existing HTML")
-    render_parser.add_argument("--html", "-h", required=True, help="Path to HTML file")
+    render_parser.add_argument("--html", required=True, help="Path to HTML file")
     render_parser.add_argument("--output", "-o", required=True, help="Output directory")
     render_parser.add_argument("--sample-id", "-s", help="Sample identifier")
     render_parser.add_argument("--wait", "-w", type=int, default=1000, help="Wait time (ms)")

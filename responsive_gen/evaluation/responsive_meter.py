@@ -1,5 +1,8 @@
 """
 Responsive Meter: Composite scoring system for responsive webpage quality.
+
+This module integrates IoU-based layout similarity, perceptual metrics,
+and LLM-based qualitative assessment into a unified scoring system.
 """
 
 from pathlib import Path
@@ -70,23 +73,23 @@ class ResponsiveMeter:
         Args:
             wireframe_triplet: Original wireframe sketches.
             rendered_output: Rendered screenshots of generated page.
-            ground_truth_dir: Optional directory with ground truth screenshots.
+            ground_truth_dir: Optional directory with ground truth HTML files.
+                            Expected structure: ground_truth_dir/mobile.html,
+                                              ground_truth_dir/tablet.html,
+                                              ground_truth_dir/desktop.html
 
         Returns:
             ResponsiveMeterScore with all metrics and composite score.
-
-        TODO: This is a stub implementation. Actual evaluation requires:
-        1. Ground truth screenshots for objective comparison
-        2. Implemented metric calculators
-        3. Implemented LLM judge
         """
         # Calculate objective metrics (if ground truth available)
-        if ground_truth_dir:
+        if ground_truth_dir and Path(ground_truth_dir).exists():
+            print(f"Computing metrics with ground truth from: {ground_truth_dir}")
             iou_metrics, perceptual_metrics = self.metrics_aggregator.calculate_all_objective_metrics(
                 rendered_output,
-                ground_truth_dir
+                Path(ground_truth_dir)
             )
         else:
+            print("No ground truth provided or directory not found. Using placeholder metrics.")
             # Placeholder metrics when no ground truth
             iou_metrics = IoUMetrics(
                 mobile_iou=0.0,
@@ -97,6 +100,8 @@ class ResponsiveMeter:
             perceptual_metrics = PerceptualMetrics()
 
         # Calculate LLM judge scores
+        # Note: LLM judge still requires implementation of image encoding
+        print("Computing LLM judge scores (placeholder)...")
         llm_judge_score = self.llm_judge.evaluate_comprehensive(
             wireframe_triplet,
             rendered_output
@@ -115,6 +120,8 @@ class ResponsiveMeter:
 
         # Calculate composite score
         meter_score.calculate_composite()
+
+        print(f"Evaluation complete. Composite score: {meter_score.composite_score:.4f}")
 
         return meter_score
 

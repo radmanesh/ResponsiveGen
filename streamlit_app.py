@@ -92,8 +92,8 @@ def main():
         )
 
         if provider == "openai":
-            model_options = ["gpt-4-vision-preview", "gpt-4-turbo", "gpt-4o"]
-            default_model = "gpt-4-vision-preview"
+            model_options = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+            default_model = "gpt-4o"
         else:
             model_options = ["claude-3-opus-20240229", "claude-3-sonnet-20240229"]
             default_model = "claude-3-opus-20240229"

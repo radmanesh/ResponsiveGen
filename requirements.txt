@@ -41,6 +41,7 @@ torchvision>=0.17.0
 # Computer Vision (for evaluation)
 scipy>=1.12.0
 scikit-image>=0.22.0
+shapely>=2.0.0
 
 # Visualization
 matplotlib>=3.8.0
@@ -48,6 +49,13 @@ seaborn>=0.13.0
 
 # Data Processing
 pandas>=2.2.0
+
+# HTML Parsing
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+
+# Progress Bars
+tqdm>=4.66.0
 
 # Utilities
 jsonschema>=4.21.0

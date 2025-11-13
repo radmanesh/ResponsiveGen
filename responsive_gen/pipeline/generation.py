@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from langchain.prompts import ChatPromptTemplate
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -145,7 +144,7 @@ class ResponsiveGenerator:
 
         # Initialize LLM
         if self.provider == "openai":
-            self.model_name = model_name or "gpt-4-vision-preview"
+            self.model_name = model_name or "gpt-4o"
             self.llm = ChatOpenAI(
                 model=self.model_name,
                 temperature=temperature,

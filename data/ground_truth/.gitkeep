@@ -1,0 +1,3 @@
+# Place ground truth HTML files here
+# Structure: ground_truth/<sample_id>/mobile.html, tablet.html, desktop.html
+

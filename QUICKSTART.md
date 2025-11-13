@@ -129,7 +129,65 @@ ls -R outputs/sample_001/
 
 # 4. Open generated HTML in browser
 open outputs/sample_001/generated.html
+
+# 5. (Optional) Evaluate against ground truth
+python cli.py evaluate \
+  --generated outputs/sample_001/generated.html \
+  --ground-truth data/ground_truth/sample_001 \
+  --output outputs/sample_001/metrics.json
 ```
+
+## Evaluation
+
+### Preparing Ground Truth Data
+
+Create ground truth HTML files for each viewport:
+
+```bash
+# Structure
+data/ground_truth/sample_001/
+├── mobile.html      # Reference HTML for mobile (375px)
+├── tablet.html      # Reference HTML for tablet (768px)
+└── desktop.html     # Reference HTML for desktop (1280px)
+```
+
+See `data/README.md` for detailed requirements.
+
+### Running Evaluation
+
+```bash
+# Evaluate generated HTML against ground truth
+python cli.py evaluate \
+  --generated outputs/sample_001/generated.html \
+  --ground-truth data/ground_truth/sample_001 \
+  --output outputs/sample_001/metrics.json
+
+# View results
+cat outputs/sample_001/metrics.json
+```
+
+### Evaluation Metrics
+
+The evaluation pipeline computes:
+
+1. **IoU Metrics** (Intersection over Union)
+   - Per-viewport layout similarity
+   - Component-level matching (text, images, nav, buttons, etc.)
+   - Uses Playwright for component extraction and Shapely for geometric calculations
+
+2. **Perceptual Metrics** (TODO)
+   - CLIP-based visual similarity
+   - Block-level structural comparison
+   - Text region alignment
+
+3. **LLM Judge** (TODO)
+   - Qualitative assessment of layout accuracy
+   - Visual hierarchy evaluation
+   - Cross-device consistency scoring
+
+4. **Responsive Meter**
+   - Composite score combining all metrics
+   - Configurable weights for each dimension
 
 ## Development
 

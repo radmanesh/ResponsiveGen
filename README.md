@@ -115,19 +115,39 @@ python cli.py evaluate \
 
 ## Evaluation Framework
 
+The evaluation system is fully functional with IoU-based layout similarity metrics using Playwright component extraction and Shapely geometric calculations.
+
 ### Objective Metrics
-- **IoU-Based Layout Similarity**: Per-component overlap for each viewport (text, images, nav, buttons, forms, etc.)
-- **Perceptual Similarity**: Block similarity, text region similarity, CLIP-based visual correspondence
+- **IoU-Based Layout Similarity**: Per-component overlap using shapely polygons
+  - Extracts visual components (text, images, nav, buttons, forms, dividers)
+  - Computes weighted IoU across component types
+  - Supports multi-viewport evaluation (mobile, tablet, desktop)
+- **Perceptual Similarity**: Block similarity, text region similarity, CLIP-based visual correspondence (TODO)
 
 ### LLM-as-a-Judge Rubrics
-1. **Layout Accuracy**: Component presence, ordering, structural fidelity per device
-2. **Visual Hierarchy & Spacing**: Grouping, alignment, proportional scale
-3. **Cross-Device Responsive Consistency**: Correct stacking/reflow, breakpoint alignment
+1. **Layout Accuracy**: Component presence, ordering, structural fidelity per device (TODO)
+2. **Visual Hierarchy & Spacing**: Grouping, alignment, proportional scale (TODO)
+3. **Cross-Device Responsive Consistency**: Correct stacking/reflow, breakpoint alignment (TODO)
 
 ### Responsive Meter (Composite Score)
 ```
 ResponsiveMeter = w1·Avg(IoU) + w2·CrossDeviceConsistency + w3·LLMJudge + w4·Perceptual
 ```
+
+### Using Evaluation
+
+```bash
+# Prepare ground truth data (see data/README.md)
+# Structure: data/ground_truth/<sample_id>/mobile.html, tablet.html, desktop.html
+
+# Run evaluation
+python cli.py evaluate \
+  --generated outputs/sample_001/generated.html \
+  --ground-truth data/ground_truth/sample_001 \
+  --output outputs/sample_001/metrics.json
+```
+
+See `data/README.md` for detailed ground truth preparation instructions.
 
 ## Research Motivation
 
