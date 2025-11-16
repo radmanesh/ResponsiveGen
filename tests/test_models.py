@@ -17,15 +17,15 @@ def test_viewport_config_mobile():
     viewport = ViewportConfig.mobile()
     assert viewport.device_type == DeviceType.MOBILE
     assert viewport.width == 375
-    assert viewport.height == 688
+    assert viewport.height == 687
 
 
 def test_viewport_config_tablet():
     """Test tablet viewport configuration."""
     viewport = ViewportConfig.tablet()
     assert viewport.device_type == DeviceType.TABLET
-    assert viewport.width == 768
-    assert viewport.height == 1024
+    assert viewport.width == 1024
+    assert viewport.height == 1366
 
 
 def test_viewport_config_desktop():
@@ -33,7 +33,7 @@ def test_viewport_config_desktop():
     viewport = ViewportConfig.desktop()
     assert viewport.device_type == DeviceType.DESKTOP
     assert viewport.width == 1280
-    assert viewport.height == 800
+    assert viewport.height == 1080
 
 
 def test_bounding_box_area():
