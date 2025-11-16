@@ -99,12 +99,13 @@ def create_responsive_graph(checkpointer=None):
     return app
 
 
-def create_responsive_graph_with_checkpointing(checkpoint_dir: str = ".checkpoints"):
+def create_responsive_graph_with_checkpointing(checkpoint_dir: str = ".checkpoints", silent: bool = False):
     """
     Create graph with SqliteSaver checkpointing for persistence.
 
     Args:
         checkpoint_dir: Directory to store checkpoint database
+        silent: If True, suppress warning when SqliteSaver is not available
 
     Returns:
         Compiled LangGraph application with checkpointing
@@ -118,24 +119,26 @@ def create_responsive_graph_with_checkpointing(checkpoint_dir: str = ".checkpoin
         checkpointer = SqliteSaver.from_conn_string(f"{checkpoint_dir}/checkpoints.db")
         return create_responsive_graph(checkpointer=checkpointer)
     except ImportError:
-        print("Warning: SqliteSaver not available. Using graph without checkpointing.")
+        if not silent:
+            print("Warning: SqliteSaver not available. Using graph without checkpointing.")
         return create_responsive_graph()
 
 
 # Convenience function that uses checkpointing by default
-def get_responsive_app(checkpoint_dir: str = ".checkpoints", use_checkpointing: bool = True):
+def get_responsive_app(checkpoint_dir: str = ".checkpoints", use_checkpointing: bool = True, silent_checkpoint_warning: bool = True):
     """
     Get compiled responsive graph application.
 
     Args:
         checkpoint_dir: Directory for checkpoint database
         use_checkpointing: Whether to enable checkpointing
+        silent_checkpoint_warning: If True, suppress warning when SqliteSaver is not available
 
     Returns:
         Compiled LangGraph application
     """
     if use_checkpointing:
-        return create_responsive_graph_with_checkpointing(checkpoint_dir)
+        return create_responsive_graph_with_checkpointing(checkpoint_dir, silent=silent_checkpoint_warning)
     else:
         return create_responsive_graph()
 

@@ -4,12 +4,10 @@
 # "auto" = uses system file watcher (fastest, recommended, default)
 # "poll" = polls filesystem every N seconds (more reliable on some systems)
 # "none" = disables auto-reload (not recommended for development)
-fileWatcherType = "auto"
+fileWatcherType = "poll"
 
-# Polling interval for file changes (only used if fileWatcherType = "poll")
-# Lower = faster detection but more CPU usage
-# Default is 5 seconds
-fileWatcherPollInterval = 2
+# Note: fileWatcherPollInterval is not available in this Streamlit version
+# Polling interval is fixed by Streamlit when using poll mode
 
 [runner]
 # Fast reruns - Streamlit will rerun immediately when files change

@@ -73,12 +73,111 @@ class LLMLogger:
             return content
         return content[:max_len] + "... [truncated]"
 
-    def _serialize_message(self, msg: Any) -> Dict[str, Any]:
-        """Serialize a message object to dict."""
+    def _has_image_content(self, content: Any) -> bool:
+        """Check if content contains image data."""
+        if isinstance(content, str):
+            # Check for base64 image data
+            if "data:image/" in content and "base64," in content:
+                return True
+        elif isinstance(content, list):
+            # Check for multimodal content with images
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "image_url" or "image" in str(item).lower():
+                        return True
+        elif isinstance(content, dict):
+            if content.get("type") == "image_url" or "image" in str(content).lower():
+                return True
+        return False
+
+    def _truncate_image_content(self, content: Any, for_prompt: bool = True) -> Any:
+        """Truncate or replace image content with summary."""
+        if isinstance(content, str):
+            # Check if it's base64 image data
+            if "data:image/" in content and "base64," in content:
+                # Extract image type and size
+                try:
+                    parts = content.split("base64,")
+                    if len(parts) == 2:
+                        image_type = parts[0].split("image/")[1].split(";")[0]
+                        data_size = len(parts[1])
+                        if for_prompt:
+                            return f"[IMAGE_DATA: {image_type}, base64 encoded, {data_size:,} bytes]"
+                        else:
+                            # For responses, check if there's text before the image
+                            text_before = content.split("data:image/")[0].strip()
+                            if text_before:
+                                # Keep text, exclude image
+                                return text_before
+                            # Pure image content, exclude entirely
+                            return None
+                except:
+                    pass
+                if for_prompt:
+                    return "[IMAGE_DATA: base64 encoded image]"
+                # For responses, try to extract any text before image
+                text_before = content.split("data:image/")[0].strip() if "data:image/" in content else ""
+                return text_before if text_before else None
+
+        elif isinstance(content, list):
+            # Handle multimodal content
+            filtered_items = []
+            for item in content:
+                if isinstance(item, dict):
+                    item_type = item.get("type", "")
+                    if item_type == "image_url":
+                        if for_prompt:
+                            url = item.get("image_url", {})
+                            if isinstance(url, dict):
+                                url_value = url.get("url", "")
+                            else:
+                                url_value = str(url)
+                            if "data:image/" in url_value and "base64," in url_value:
+                                try:
+                                    parts = url_value.split("base64,")
+                                    if len(parts) == 2:
+                                        image_type = parts[0].split("image/")[1].split(";")[0]
+                                        data_size = len(parts[1])
+                                        filtered_items.append({
+                                            "type": "text",
+                                            "text": f"[IMAGE_DATA: {image_type}, base64 encoded, {data_size:,} bytes]"
+                                        })
+                                except:
+                                    filtered_items.append({"type": "text", "text": "[IMAGE_DATA: base64 encoded image]"})
+                            else:
+                                filtered_items.append({"type": "text", "text": f"[IMAGE_URL: {url_value[:100]}...]"})
+                        # For responses, skip image items entirely
+                    elif item_type == "text":
+                        # Keep text content as is
+                        filtered_items.append(item)
+                    else:
+                        # Keep other content types
+                        filtered_items.append(item)
+                else:
+                    filtered_items.append(item)
+            # If all items were filtered out (only images in response), return None
+            if not filtered_items and not for_prompt:
+                return None
+            return filtered_items if filtered_items else content
+
+        elif isinstance(content, dict):
+            if content.get("type") == "image_url":
+                if for_prompt:
+                    return {"type": "text", "text": "[IMAGE_DATA: base64 encoded image]"}
+                return None
+
+        return content
+
+    def _serialize_message(self, msg: Any, truncate_images: bool = True) -> Dict[str, Any]:
+        """Serialize a message object to dict, optionally truncating images."""
         if hasattr(msg, "content"):
+            content = msg.content if hasattr(msg, "content") else str(msg)
+            # Truncate image content if requested
+            if truncate_images and self._has_image_content(content):
+                content = self._truncate_image_content(content, for_prompt=True)
             return {
                 "type": msg.__class__.__name__,
-                "content": msg.content if hasattr(msg, "content") else str(msg),
+                "content": content,
             }
         return {"type": type(msg).__name__, "content": str(msg)}
 
@@ -114,14 +213,23 @@ class LLMLogger:
                 msg_content = (
                     msg.content if hasattr(msg, "content") else str(msg)
                 )
-                preview = self._truncate_content(msg_content, 150)
+                # Truncate images in message content for console
+                if self._has_image_content(msg_content):
+                    msg_content = self._truncate_image_content(msg_content, for_prompt=True)
+                    if not isinstance(msg_content, str):
+                        if isinstance(msg_content, (list, dict)):
+                            msg_content = json.dumps(msg_content, indent=0, ensure_ascii=False)
+                        else:
+                            msg_content = str(msg_content)
+                preview = self._truncate_content(str(msg_content), 150)
                 msg_type = msg.__class__.__name__ if hasattr(msg, "__class__") else type(msg).__name__
                 lines.append(f"    {i+1}. [{msg_type}] {preview}")
             if len(request_messages) > 3:
                 lines.append(f"    ... and {len(request_messages) - 3} more")
 
         if response_content:
-            preview = self._truncate_content(response_content, 200)
+            # response_content should already be truncated (images removed) by log_response
+            preview = self._truncate_content(str(response_content), 200)
             lines.append(f"  Response: {preview}")
 
         if tool_calls:
@@ -149,7 +257,8 @@ class LLMLogger:
         lines = []
         lines.append("  REQUEST MESSAGES:")
         for i, msg in enumerate(request_messages):
-            msg_dict = self._serialize_message(msg)
+            # Serialize with image truncation for prompts
+            msg_dict = self._serialize_message(msg, truncate_images=True)
             lines.append(f"    [{i+1}] {msg_dict['type']}:")
             content = msg_dict.get("content", "")
             # Ensure content is a string
@@ -158,12 +267,12 @@ class LLMLogger:
                     content = json.dumps(content, indent=2, ensure_ascii=False)
                 else:
                     content = str(content)
-            # For long content, show with proper indentation
-            if len(content) > 500:
+            # Truncate very long text content (but not image placeholders)
+            if isinstance(content, str) and len(content) > 500 and "[IMAGE_DATA:" not in content:
                 lines.append(f"      {content[:500]}...")
                 lines.append(f"      ... [{len(content) - 500} more chars]")
             else:
-                for line in content.split("\n"):
+                for line in str(content).split("\n"):
                     lines.append(f"      {line}")
 
         lines.append("\n  RESPONSE:")
@@ -323,12 +432,33 @@ class LLMLogger:
         # Extract response content
         if hasattr(response, "content"):
             response_content = response.content
-            # Ensure response_content is a string (could be list/dict for multimodal)
+            # Truncate image content from responses for console output
+            response_content_for_console = self._truncate_image_content(response_content, for_prompt=False)
+            if response_content_for_console is None:
+                # All content was images, replace with placeholder
+                response_content_for_console = "[RESPONSE: Contains only image data, excluded from console output]"
+
+            # For console, use truncated version (without images)
+            console_response_content = response_content_for_console
+
+            # Ensure console_response_content is a string
+            if not isinstance(console_response_content, str):
+                if isinstance(console_response_content, (list, dict)):
+                    console_response_content = json.dumps(console_response_content, indent=2, ensure_ascii=False)
+                else:
+                    console_response_content = str(console_response_content)
+
+            # For file logging, keep full content but serialize properly
             if not isinstance(response_content, str):
                 if isinstance(response_content, (list, dict)):
-                    response_content = json.dumps(response_content, indent=2, ensure_ascii=False)
+                    response_content_str = json.dumps(response_content, indent=2, ensure_ascii=False)
                 else:
-                    response_content = str(response_content)
+                    response_content_str = str(response_content)
+            else:
+                response_content_str = response_content
+
+            # Use truncated version for console, full for file
+            response_content = console_response_content
         else:
             response_content = str(response)
 
@@ -373,17 +503,39 @@ class LLMLogger:
             print(console_output)
 
         if self._should_log(LogLevel.TRACE):
+            # Use truncated response content for console
             console_output = self._format_console_trace(
                 request_messages, response_content, tool_calls, token_usage
             )
             print(console_output)
 
         # Prepare log entry
+        # For file logging, serialize messages with image truncation for prompts
         serialized_messages = (
-            [self._serialize_message(msg) for msg in request_messages]
+            [self._serialize_message(msg, truncate_images=True) for msg in request_messages]
             if self.level == LogLevel.TRACE
             else []
         )
+
+        # For response, get the original response content (before truncation)
+        # We need to re-extract it since we modified response_content for console
+        if hasattr(response, "content"):
+            original_response_content = response.content
+            # For file logging, truncate images but keep structure
+            file_response_content = self._truncate_image_content(original_response_content, for_prompt=False)
+            if file_response_content is None:
+                file_response_content = "[RESPONSE: Contains only image data]"
+
+            # Convert to string for file logging
+            if not isinstance(file_response_content, str):
+                if isinstance(file_response_content, (list, dict)):
+                    file_response_content_str = json.dumps(file_response_content, indent=2, ensure_ascii=False)
+                else:
+                    file_response_content_str = str(file_response_content)
+            else:
+                file_response_content_str = file_response_content
+        else:
+            file_response_content_str = str(response)
 
         log_entry = {
             "timestamp": timestamp,
@@ -398,13 +550,13 @@ class LLMLogger:
                 "message_count": len(request_messages),
             },
             "response": {
-                "content": response_content if self.level == LogLevel.TRACE else None,
+                "content": file_response_content_str if self.level == LogLevel.TRACE else None,
                 "content_preview": (
-                    self._truncate_content(response_content, 200)
+                    self._truncate_content(file_response_content_str, 200)
                     if self.level.value >= LogLevel.DEBUG.value
                     else None
                 ),
-                "content_length": len(response_content),
+                "content_length": len(file_response_content_str),
                 "tool_calls": tool_calls if tool_calls else None,
             },
             "timing": {
@@ -416,9 +568,9 @@ class LLMLogger:
             "metadata": metadata or {},
         }
 
-        # For TRACE, always include full content
+        # For TRACE, always include full content (with images truncated)
         if self.level == LogLevel.TRACE:
-            log_entry["response"]["content"] = response_content
+            log_entry["response"]["content"] = file_response_content_str
             log_entry["request"]["messages"] = serialized_messages
 
         self._write_to_file(sample_id, log_entry)
