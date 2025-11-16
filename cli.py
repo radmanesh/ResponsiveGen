@@ -257,6 +257,138 @@ def cmd_evaluate(args):
         return 1
 
 
+def cmd_orchestrate(args):
+    """Run multi-agent orchestration workflow."""
+    print("🤖 Starting multi-agent orchestration workflow...")
+
+    from responsive_gen.orchestration.graph import get_responsive_app
+    from responsive_gen.io.sketch_loader import SketchLoader
+    from langchain_core.messages import HumanMessage
+    from datetime import datetime
+
+    # Validate inputs
+    mobile_path = Path(args.mobile)
+    tablet_path = Path(args.tablet)
+    desktop_path = Path(args.desktop)
+
+    if not mobile_path.exists():
+        print(f"❌ Error: Mobile sketch not found: {mobile_path}")
+        return 1
+    if not tablet_path.exists():
+        print(f"❌ Error: Tablet sketch not found: {tablet_path}")
+        return 1
+    if not desktop_path.exists():
+        print(f"❌ Error: Desktop sketch not found: {desktop_path}")
+        return 1
+
+    # Load sketches
+    sketch_loader = SketchLoader()
+    sample_id = args.sample_id or mobile_path.stem
+
+    print(f"📁 Sample ID: {sample_id}")
+    print(f"📱 Mobile: {mobile_path}")
+    print(f"💻 Tablet: {tablet_path}")
+    print(f"🖥️  Desktop: {desktop_path}")
+
+    triplet = sketch_loader.load_triplet(
+        mobile_path, tablet_path, desktop_path,
+        sample_id=sample_id
+    )
+
+    # Initialize orchestration app
+    print(f"\n🔧 Initializing orchestration system...")
+    app = get_responsive_app(
+        checkpoint_dir=args.checkpoint_dir,
+        use_checkpointing=True
+    )
+
+    # Prepare initial state
+    thread_id = args.thread_id or f"thread_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    initial_state = {
+        "messages": [HumanMessage(content=f"Generate responsive HTML from wireframe sketches for sample {sample_id}")],
+        "sample_id": sample_id,
+        "sketch_triplet": triplet,
+        "html": None,
+        "html_path": None,
+        "eval_results": {},
+        "responsive_score": None,
+        "edit_history": [],
+        "active_view": None,
+        "focus_selector": None,
+        "iteration": 0,
+        "next_step": None,
+        "screenshots": {},
+        "feedback": None,
+        "edit_target": None,
+    }
+
+    print(f"🧵 Thread ID: {thread_id}")
+    print(f"🔄 Max iterations: {args.max_iterations}")
+    print(f"🎯 Score threshold: {args.score_threshold}")
+    print("\n" + "="*60)
+
+    # Run orchestration
+    # The graph will handle routing internally until FINISH or max iterations
+    try:
+        print("🚀 Starting orchestration workflow...\n")
+
+        # Invoke graph - it will run until FINISH or we interrupt
+        result = app.invoke(initial_state, config=config)
+
+        # Display final progress
+        print("\n" + "="*60)
+        print("✅ Orchestration Complete")
+        print("="*60)
+        print(f"Final Step: {result.get('next_step', 'UNKNOWN')}")
+        if result.get('responsive_score') is not None:
+            print(f"📈 Responsive Score: {result.get('responsive_score'):.4f}")
+        if result.get('iteration'):
+            print(f"🔄 Iterations: {result.get('iteration')}")
+        if result.get('active_view'):
+            print(f"👁️  Active View: {result.get('active_view')}")
+        if result.get('focus_selector'):
+            print(f"🎯 Focus Selector: {result.get('focus_selector')}")
+
+        # Final results
+        if result:
+            print("\n" + "="*60)
+            print("📊 Final Results")
+            print("="*60)
+            print(f"✅ Iterations completed: {result.get('iteration', 0)}")
+            print(f"📈 Final Score: {result.get('responsive_score', 0.0):.4f}")
+
+            if result.get('html'):
+                # Save HTML
+                output_dir = Path(args.output) / sample_id
+                output_dir.mkdir(parents=True, exist_ok=True)
+                html_path = output_dir / "generated.html"
+                html_path.write_text(result['html'], encoding='utf-8')
+                print(f"📄 HTML saved: {html_path}")
+
+            if result.get('eval_results'):
+                # Save metrics
+                import json
+                metrics_path = output_dir / "metrics.json"
+                metrics_path.write_text(
+                    json.dumps(result['eval_results'], indent=2),
+                    encoding='utf-8'
+                )
+                print(f"📊 Metrics saved: {metrics_path}")
+
+        return 0
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Interrupted by user")
+        return 130
+    except Exception as e:
+        print(f"\n❌ Orchestration failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -295,6 +427,18 @@ def main():
     eval_parser.add_argument("--wireframes", help="Path to wireframe directory")
     eval_parser.add_argument("--output", "-o", required=True, help="Output path for metrics JSON")
 
+    # Orchestration command
+    orch_parser = subparsers.add_parser("orchestrate", help="Run multi-agent orchestration workflow")
+    orch_parser.add_argument("--mobile", "-m", required=True, help="Path to mobile wireframe")
+    orch_parser.add_argument("--tablet", "-t", required=True, help="Path to tablet wireframe")
+    orch_parser.add_argument("--desktop", "-d", required=True, help="Path to desktop wireframe")
+    orch_parser.add_argument("--sample-id", "-s", help="Sample identifier")
+    orch_parser.add_argument("--output", "-o", default="outputs", help="Output directory")
+    orch_parser.add_argument("--thread-id", help="Thread ID for state persistence")
+    orch_parser.add_argument("--max-iterations", type=int, default=5, help="Maximum iterations")
+    orch_parser.add_argument("--score-threshold", type=float, default=0.7, help="Score threshold to stop")
+    orch_parser.add_argument("--checkpoint-dir", default=".checkpoints", help="Checkpoint directory")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -308,6 +452,8 @@ def main():
             return cmd_render(args)
         elif args.command == "evaluate":
             return cmd_evaluate(args)
+        elif args.command == "orchestrate":
+            return cmd_orchestrate(args)
     except KeyboardInterrupt:
         print("\n\n⚠️  Interrupted by user")
         return 130

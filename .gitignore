@@ -41,6 +41,7 @@ ENV/
 # Outputs
 outputs/
 .cache/
+.checkpoints/
 
 # Testing
 .pytest_cache/

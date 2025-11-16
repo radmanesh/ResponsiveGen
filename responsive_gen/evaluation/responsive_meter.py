@@ -35,7 +35,7 @@ class ResponsiveMeter:
         w2: float = 0.25,  # Cross-device consistency weight
         w3: float = 0.25,  # LLM judge weight
         w4: float = 0.15,  # Perceptual similarity weight
-        judge_provider: str = "openai",
+        judge_provider: Optional[str] = None,
         judge_model: Optional[str] = None
     ):
         """
@@ -46,8 +46,8 @@ class ResponsiveMeter:
             w2: Weight for cross-device consistency.
             w3: Weight for LLM judge score.
             w4: Weight for perceptual similarity.
-            judge_provider: LLM provider for judge.
-            judge_model: Model name for judge.
+            judge_provider: LLM provider for judge. If None, reads from EVALUATOR_PROVIDER env var.
+            judge_model: Model name for judge. If None, reads from EVALUATOR_MODEL env var.
         """
         self.w1 = w1
         self.w2 = w2
@@ -59,6 +59,7 @@ class ResponsiveMeter:
         self.w1, self.w2, self.w3, self.w4 = w1/total, w2/total, w3/total, w4/total
 
         self.metrics_aggregator = MetricsAggregator()
+        # Pass None defaults to allow LLMJudge to read from env vars
         self.llm_judge = LLMJudge(provider=judge_provider, model_name=judge_model)
 
     def evaluate(
