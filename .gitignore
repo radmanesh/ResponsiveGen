@@ -69,3 +69,5 @@ logs/
 playwright-report/
 test-results/
 
+# Streamlit
+.streamlit/secrets.toml
