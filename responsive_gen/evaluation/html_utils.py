@@ -110,13 +110,20 @@ def is_within(box1: Dict[str, float], box2: Dict[str, float]) -> bool:
     )
 
 
-def extract_visual_components(url: str, save_path: Optional[str] = None) -> Dict[str, List[Dict]]:
+def extract_visual_components(
+    url: str,
+    save_path: Optional[str] = None,
+    viewport_width: Optional[int] = None,
+    viewport_height: Optional[int] = None
+) -> Dict[str, List[Dict]]:
     """
     Extract visual components from an HTML file using Playwright.
 
     Args:
         url: Path to HTML file or URL
         save_path: Optional path to save annotated screenshot
+        viewport_width: Optional viewport width in pixels (default: browser default)
+        viewport_height: Optional viewport height in pixels (default: browser default, or full page height)
 
     Returns:
         Dictionary mapping component types to lists of component data
@@ -132,10 +139,30 @@ def extract_visual_components(url: str, save_path: Optional[str] = None) -> Dict
         with sync_playwright() as p:
             # Launch browser
             browser = p.chromium.launch()
-            page = browser.new_page()
+
+            # Create page with optional viewport
+            viewport_dict = None
+            if viewport_width is not None:
+                # Use provided height or a large default to allow full page rendering
+                # The actual page height will be determined by the content
+                height = viewport_height if viewport_height is not None else 2000  # Large default for full page rendering
+                viewport_dict = {
+                    "width": viewport_width,
+                    "height": height
+                }
+
+            if viewport_dict:
+                page = browser.new_page(viewport=viewport_dict)
+            else:
+                page = browser.new_page()
 
             # Navigate to the URL
             page.goto(url, timeout=60000)
+
+            # Wait a bit for rendering
+            page.wait_for_timeout(500)
+
+            # Get actual rendered dimensions (will be full page height)
             total_width = page.evaluate("() => document.documentElement.scrollWidth")
             total_height = page.evaluate("() => document.documentElement.scrollHeight")
 

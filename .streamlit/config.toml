@@ -1,0 +1,23 @@
+[server]
+# Enable file watcher for auto-reload
+# Options: "auto", "poll", "none"
+# "auto" = uses system file watcher (fastest, recommended, default)
+# "poll" = polls filesystem every N seconds (more reliable on some systems)
+# "none" = disables auto-reload (not recommended for development)
+fileWatcherType = "poll"
+
+# Note: fileWatcherPollInterval is not available in this Streamlit version
+# Polling interval is fixed by Streamlit when using poll mode
+
+[runner]
+# Fast reruns - Streamlit will rerun immediately when files change
+# This is enabled by default, but explicitly set for clarity
+fastReruns = true
+
+# Magic commands enabled (allow Streamlit magic commands)
+magicEnabled = true
+
+[client]
+# Show detailed error information in the UI
+showErrorDetails = true
+

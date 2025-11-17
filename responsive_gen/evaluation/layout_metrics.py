@@ -151,32 +151,11 @@ class IoUCalculator:
 
         Args:
             generated_output: Rendered output with screenshots
-            ground_truth_dir: Directory with ground truth HTML files
+            ground_truth_dir: Directory with ground truth HTML files OR a single HTML file path
 
         Returns:
             IoUMetrics object with scores
         """
-        # Assume ground truth files are named: mobile.html, tablet.html, desktop.html
-        gt_mobile = ground_truth_dir / "mobile.html"
-        gt_tablet = ground_truth_dir / "tablet.html"
-        gt_desktop = ground_truth_dir / "desktop.html"
-
-        # For now, we'll use layout_similarity function
-        # Note: This requires the original HTML, not screenshots
-        # In a full implementation, you'd render screenshots at each viewport
-
-        # Placeholder: return zero metrics if ground truth not found
-        if not all([gt_mobile.exists(), gt_tablet.exists(), gt_desktop.exists()]):
-            return IoUMetrics(
-                mobile_iou=0.0,
-                tablet_iou=0.0,
-                desktop_iou=0.0,
-                average_iou=0.0,
-                per_component_iou={}
-            )
-
-        # Use layout_similarity to compute IoU
-        # This is a simplified version - full implementation would render at each viewport
         from responsive_gen.evaluation.layout_similarity import (
             compute_layout_similarity_multi_viewport
         )
@@ -196,12 +175,40 @@ class IoUCalculator:
                 per_component_iou={}
             )
 
+        # Check if ground_truth_dir is actually a single HTML file
+        single_gt_file = False
+        if ground_truth_dir.is_file() and ground_truth_dir.suffix == ".html":
+            # Single HTML file - render at three viewport sizes
+            single_gt_file = True
+            gt_mobile = ground_truth_dir
+            gt_tablet = ground_truth_dir
+            gt_desktop = ground_truth_dir
+        else:
+            # Directory with mobile.html, tablet.html, desktop.html (existing behavior)
+            gt_mobile = ground_truth_dir / "mobile.html"
+            gt_tablet = ground_truth_dir / "tablet.html"
+            gt_desktop = ground_truth_dir / "desktop.html"
+
+            # Placeholder: return zero metrics if ground truth files not found
+            if not all([gt_mobile.exists(), gt_tablet.exists(), gt_desktop.exists()]):
+                return IoUMetrics(
+                    mobile_iou=0.0,
+                    tablet_iou=0.0,
+                    desktop_iou=0.0,
+                    average_iou=0.0,
+                    per_component_iou={}
+                )
+
+        # Use layout_similarity to compute IoU
+        # If single_gt_file is True, the same HTML will be rendered at different viewports
+        # (mobile 375px, tablet 768px, desktop 1280px) with full height
         results = compute_layout_similarity_multi_viewport(
             str(generated_html),
             str(gt_mobile),
             str(gt_tablet),
             str(gt_desktop),
-            debug=False
+            debug=False,
+            single_gt_file=single_gt_file
         )
 
         return IoUMetrics(

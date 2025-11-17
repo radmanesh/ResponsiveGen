@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -18,6 +19,7 @@ from responsive_gen.models import (
     GeneratedHTML,
     SketchTriplet,
 )
+from responsive_gen.utils.llm_logger import LoggedLLM
 
 
 SYSTEM_PROMPT = """You are an expert frontend developer specializing in responsive web design.
@@ -121,46 +123,61 @@ class ResponsiveGenerator:
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: Optional[str] = None,
         model_name: Optional[str] = None,
-        temperature: float = 0.3,
-        max_tokens: int = 4096,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
         api_key: Optional[str] = None
     ):
         """
         Initialize the generator.
 
         Args:
-            provider: LLM provider (openai or anthropic).
-            model_name: Model name (optional, uses defaults).
-            temperature: Generation temperature.
-            max_tokens: Maximum tokens to generate.
+            provider: LLM provider (openai or anthropic). If None, reads from GENERATOR_PROVIDER env var.
+            model_name: Model name. If None, reads from GENERATOR_MODEL env var.
+            temperature: Generation temperature. If None, reads from GENERATOR_TEMPERATURE env var.
+            max_tokens: Maximum tokens to generate. If None, reads from GENERATOR_MAX_TOKENS env var.
             api_key: API key (optional, uses environment variable).
         """
-        self.provider = provider.lower()
-        self.temperature = temperature
-        self.max_tokens = max_tokens
+        # Load environment variables
+        load_dotenv()
+
+        # Get configuration from env vars if not explicitly provided
+        self.provider = (provider or os.getenv("GENERATOR_PROVIDER", "openai")).lower()
+        self.temperature = temperature if temperature is not None else float(os.getenv("GENERATOR_TEMPERATURE", "0.3"))
+        self.max_tokens = max_tokens if max_tokens is not None else int(os.getenv("GENERATOR_MAX_TOKENS", "4096"))
         self.parser = ResponseParser()
 
         # Initialize LLM
+        llm_instance = None
         if self.provider == "openai":
-            self.model_name = model_name or "gpt-4o"
-            self.llm = ChatOpenAI(
+            self.model_name = model_name or os.getenv("GENERATOR_MODEL", "gpt-4o")
+            llm_instance = ChatOpenAI(
                 model=self.model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
                 api_key=api_key or os.getenv("OPENAI_API_KEY")
             )
         elif self.provider == "anthropic":
-            self.model_name = model_name or "claude-3-opus-20240229"
-            self.llm = ChatAnthropic(
+            self.model_name = model_name or os.getenv("GENERATOR_MODEL", "claude-3-opus-20240229")
+            llm_instance = ChatAnthropic(
                 model=self.model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
                 api_key=api_key or os.getenv("ANTHROPIC_API_KEY")
             )
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            raise ValueError(f"Unsupported provider: {self.provider}")
+
+        # Wrap with logging (sample_id will be set during generate)
+        self.llm = LoggedLLM(
+            llm_instance=llm_instance,
+            component="generator",
+            provider=self.provider,
+            model=self.model_name,
+            sample_id=None,  # Will be updated per call
+            metadata={"temperature": self.temperature, "max_tokens": self.max_tokens}
+        )
 
     def _create_prompt(
         self,
@@ -296,13 +313,21 @@ class ResponsiveGenerator:
         if sketch_loader is None:
             sketch_loader = SketchLoader()
 
+        # Update LLM wrapper with sample_id for logging
+        self.llm.sample_id = sketch_triplet.sample_id
+        self.llm.metadata = {
+            **self.llm.metadata,
+            "sample_id": sketch_triplet.sample_id,
+            "device_types": [dt.value for dt in [DeviceType.MOBILE, DeviceType.TABLET, DeviceType.DESKTOP]]
+        }
+
         # Prepare triplet data
         triplet_data = sketch_loader.prepare_for_llm(sketch_triplet)
 
         # Create prompt
         messages = self._create_prompt(triplet_data)
 
-        # Generate response
+        # Generate response (logging happens automatically via wrapper)
         response = self.llm.invoke(messages)
 
         # Extract HTML

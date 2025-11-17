@@ -16,7 +16,9 @@ from responsive_gen.evaluation.html_utils import (
 
 def layout_similarity(
     input_list: Tuple[List[str], str],
-    debug: bool = False
+    debug: bool = False,
+    viewport_width: Optional[int] = None,
+    viewport_height: Optional[int] = None
 ) -> Tuple[List[float], List[Dict[str, Tuple[float, float]]]]:
     """
     Compute layout similarity between predicted and reference HTML files.
@@ -24,6 +26,8 @@ def layout_similarity(
     Args:
         input_list: Tuple of (list of predicted HTML paths, reference HTML path)
         debug: If True, save annotated screenshots
+        viewport_width: Optional viewport width in pixels for rendering
+        viewport_height: Optional viewport height in pixels for rendering (default: full page height)
 
     Returns:
         Tuple of (similarity_scores, multi_scale_scores)
@@ -39,12 +43,22 @@ def layout_similarity(
     if debug:
         reference_save_path = original_html.replace(".html", "_ref.png")
 
-    reference_layout = extract_visual_components(original_html, reference_save_path)
+    reference_layout = extract_visual_components(
+        original_html,
+        reference_save_path,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height
+    )
 
     # Compare each predicted layout to reference
     for predict_html in predict_html_list:
         predict_save_path = predict_html.replace(".html", "_pred.png") if debug else None
-        predict_layout = extract_visual_components(predict_html, predict_save_path)
+        predict_layout = extract_visual_components(
+            predict_html,
+            predict_save_path,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height
+        )
 
         iou_score, multi_score = compute_weighted_iou_shapely(predict_layout, reference_layout)
         results.append(iou_score)
@@ -58,7 +72,8 @@ def compute_layout_similarity_multi_viewport(
     ground_truth_mobile: str,
     ground_truth_tablet: str,
     ground_truth_desktop: str,
-    debug: bool = False
+    debug: bool = False,
+    single_gt_file: bool = False
 ) -> Dict[str, float]:
     """
     Compute layout similarity for a responsive webpage across multiple viewports.
@@ -69,10 +84,11 @@ def compute_layout_similarity_multi_viewport(
 
     Args:
         generated_html: Path to generated responsive HTML file
-        ground_truth_mobile: Path to ground truth mobile HTML
-        ground_truth_tablet: Path to ground truth tablet HTML
-        ground_truth_desktop: Path to ground truth desktop HTML
+        ground_truth_mobile: Path to ground truth mobile HTML (or single HTML file if single_gt_file=True)
+        ground_truth_tablet: Path to ground truth tablet HTML (or single HTML file if single_gt_file=True)
+        ground_truth_desktop: Path to ground truth desktop HTML (or single HTML file if single_gt_file=True)
         debug: If True, save annotated screenshots
+        single_gt_file: If True, ground_truth_mobile/tablet/desktop are the same file, render at different viewports
 
     Returns:
         Dictionary with IoU scores for each viewport and average:
@@ -83,28 +99,39 @@ def compute_layout_similarity_multi_viewport(
             'average_iou': float
         }
     """
-    # Note: This is a simplified version. For true multi-viewport comparison,
-    # you'd need to render the generated HTML at each viewport size and
-    # extract components from those rendered versions.
+    # Viewport sizes for responsive rendering
+    MOBILE_WIDTH = 375
+    TABLET_WIDTH = 768
+    DESKTOP_WIDTH = 1280
+
+    # Use full page height (None means full page)
+    VIEWPORT_HEIGHT = None  # Will use full page height
 
     results = {}
 
     # Compute similarity for each viewport
+    # If single_gt_file is True, pass the same HTML file but with different viewport widths
     mobile_scores, _ = layout_similarity(
         ([generated_html], ground_truth_mobile),
-        debug=debug
+        debug=debug,
+        viewport_width=MOBILE_WIDTH if single_gt_file else None,
+        viewport_height=VIEWPORT_HEIGHT
     )
     results['mobile_iou'] = mobile_scores[0]
 
     tablet_scores, _ = layout_similarity(
         ([generated_html], ground_truth_tablet),
-        debug=debug
+        debug=debug,
+        viewport_width=TABLET_WIDTH if single_gt_file else None,
+        viewport_height=VIEWPORT_HEIGHT
     )
     results['tablet_iou'] = tablet_scores[0]
 
     desktop_scores, _ = layout_similarity(
         ([generated_html], ground_truth_desktop),
-        debug=debug
+        debug=debug,
+        viewport_width=DESKTOP_WIDTH if single_gt_file else None,
+        viewport_height=VIEWPORT_HEIGHT
     )
     results['desktop_iou'] = desktop_scores[0]
 

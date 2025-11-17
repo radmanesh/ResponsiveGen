@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -18,6 +19,7 @@ from responsive_gen.models import (
     RenderedOutput,
     SketchTriplet,
 )
+from responsive_gen.utils.llm_logger import LoggedLLM
 
 
 JUDGE_SYSTEM_PROMPT = """You are an expert frontend developer and UX designer evaluating
@@ -105,39 +107,54 @@ class LLMJudge:
 
     def __init__(
         self,
-        provider: str = "openai",
+        provider: Optional[str] = None,
         model_name: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: Optional[float] = None,
         api_key: Optional[str] = None
     ):
         """
         Initialize LLM judge.
 
         Args:
-            provider: LLM provider (openai or anthropic).
-            model_name: Model name (optional).
-            temperature: Generation temperature (low for consistency).
+            provider: LLM provider (openai or anthropic). If None, reads from EVALUATOR_PROVIDER env var.
+            model_name: Model name. If None, reads from EVALUATOR_MODEL env var.
+            temperature: Generation temperature (low for consistency). If None, reads from EVALUATOR_TEMPERATURE env var.
             api_key: API key (optional, uses environment).
         """
-        self.provider = provider.lower()
-        self.temperature = temperature
+        # Load environment variables
+        load_dotenv()
 
+        # Get configuration from env vars if not explicitly provided
+        self.provider = (provider or os.getenv("EVALUATOR_PROVIDER", "openai")).lower()
+        self.temperature = temperature if temperature is not None else float(os.getenv("EVALUATOR_TEMPERATURE", "0.1"))
+
+        llm_instance = None
         if self.provider == "openai":
-            self.model_name = model_name or "gpt-4-vision-preview"
-            self.llm = ChatOpenAI(
+            self.model_name = model_name or os.getenv("EVALUATOR_MODEL", "gpt-4o")
+            llm_instance = ChatOpenAI(
                 model=self.model_name,
-                temperature=temperature,
+                temperature=self.temperature,
                 api_key=api_key or os.getenv("OPENAI_API_KEY")
             )
         elif self.provider == "anthropic":
-            self.model_name = model_name or "claude-3-opus-20240229"
-            self.llm = ChatAnthropic(
+            self.model_name = model_name or os.getenv("EVALUATOR_MODEL", "claude-3-opus-20240229")
+            llm_instance = ChatAnthropic(
                 model=self.model_name,
-                temperature=temperature,
+                temperature=self.temperature,
                 api_key=api_key or os.getenv("ANTHROPIC_API_KEY")
             )
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            raise ValueError(f"Unsupported provider: {self.provider}")
+
+        # Wrap with logging
+        self.llm = LoggedLLM(
+            llm_instance=llm_instance,
+            component="judge",
+            provider=self.provider,
+            model=self.model_name,
+            sample_id=None,  # Will be set per evaluation call if needed
+            metadata={"temperature": self.temperature, "judge_type": "llm_evaluator"}
+        )
 
     def _create_image_content(self, image_path: Path) -> dict:
         """
